@@ -1,15 +1,12 @@
 package integration_tests
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/cosmos/cosmos-sdk/x/params/client/utils"
 	"testing"
 	"time"
 
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-
 	xiontypes "github.com/burnt-labs/xion/x/xion/types"
-	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/types"
 	ibctest "github.com/strangelove-ventures/interchaintest/v7"
 	"github.com/strangelove-ventures/interchaintest/v7/chain/cosmos"
@@ -33,7 +30,8 @@ func TestXionSendPlatformFee(t *testing.T) {
 	users := ibctest.GetAndFundTestUsers(t, ctx, "default", fundAmount, xion)
 	xionUser := users[0]
 	currentHeight, _ := xion.Height(ctx)
-	testutil.WaitForBlocks(ctx, int(currentHeight)+8, xion)
+	err := testutil.WaitForBlocks(ctx, int(currentHeight)+8, xion)
+	require.NoError(t, err)
 	t.Logf("created xion user %s", xionUser.FormattedAddress())
 
 	xionUserBalInitial, err := xion.GetBalance(ctx, xionUser.FormattedAddress(), xion.Config().Denom)
@@ -54,7 +52,7 @@ func TestXionSendPlatformFee(t *testing.T) {
 		&xiontypes.MsgSetPlatformPercentage{},
 		&xiontypes.MsgSend{},
 	)
-	cdc := codec.NewProtoCodec(xion.Config().EncodingConfig.InterfaceRegistry)
+	//cdc := codec.NewProtoCodec(xion.Config().EncodingConfig.InterfaceRegistry)
 
 	_, err = xion.FullNodes[0].ExecTx(ctx,
 		xionUser.KeyName(),
@@ -67,6 +65,7 @@ func TestXionSendPlatformFee(t *testing.T) {
 	require.Eventuallyf(t, func() bool {
 		balance, err := xion.GetBalance(ctx, recipientKeyAddress, xion.Config().Denom)
 		require.NoError(t, err)
+		t.Logf("balance received: %d", balance)
 		return uint64(balance) == uint64(100)
 	},
 		time.Second*20,
@@ -77,22 +76,36 @@ func TestXionSendPlatformFee(t *testing.T) {
 	config := types.GetConfig()
 	config.SetBech32PrefixForAccount("xion", "xionpub")
 
-	setPlatformPercentageMsg := xiontypes.MsgSetPlatformPercentage{
-		Authority:          authtypes.NewModuleAddress("gov").String(),
-		PlatformPercentage: 500,
-	}
+	//setPlatformPercentageMsg := xiontypes.MsgSetPlatformPercentage{
+	//	Authority:          authtypes.NewModuleAddress("gov").String(),
+	//	PlatformPercentage: 500,
+	//}
+	//
+	//msg, err := cdc.MarshalInterfaceJSON(&setPlatformPercentageMsg)
+	//require.NoError(t, err)
 
-	msg, err := cdc.MarshalInterfaceJSON(&setPlatformPercentageMsg)
-	require.NoError(t, err)
+	//prop := cosmos.TxProposalv1{
+	//	Messages: []json.RawMessage{msg},
+	//	Metadata: "",
+	//	Deposit:  "100uxion",
+	//	Title:    "Set platform percentage to 5%",
+	//	Summary:  "Ups the platform fee to 5% for the integration test",
+	//}
+	paramChangeTx, err := xion.ParamChangeProposal(ctx, xionUser.KeyName(),
+		&utils.ParamChangeProposalJSON{
+			Title:       "Set platform percentage to 5%",
+			Description: "Ups the platform fee to 5% for the integration test",
+			Changes: utils.ParamChangesJSON{
+				{
+					Subspace: "xion",
+					Key:      "platform_percentage",
+					Value:    []byte("5000"),
+				},
+			},
+			Deposit: "100uxion",
+		})
 
-	prop := cosmos.TxProposalv1{
-		Messages: []json.RawMessage{msg},
-		Metadata: "",
-		Deposit:  "100uxion",
-		Title:    "Set platform percentage to 5%",
-		Summary:  "Ups the platform fee to 5% for the integration test",
-	}
-	paramChangeTx, err := xion.SubmitProposal(ctx, xionUser.KeyName(), prop)
+	//paramChangeTx, err := xion.SubmitProposal(ctx, xionUser.KeyName(), prop)
 	require.NoError(t, err)
 	t.Logf("Platform percentage change proposal submitted with ID %s in transaction %s", paramChangeTx.ProposalID, paramChangeTx.TxHash)
 
