@@ -233,4 +233,4 @@ replace (
 	github.com/vektra/mockery/v2 => github.com/vektra/mockery/v2 v2.14.0
 )
 
-replace github.com/larry0x/abstract-account => github.com/burnt-labs/abstract-account v0.0.0-20240202022305-255071ed91ee
+replace github.com/larry0x/abstract-account => github.com/burnt-labs/abstract-account v0.0.0-20240701200036-995278e8ca9b
