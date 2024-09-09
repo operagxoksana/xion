@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION="1.22"
-ARG ALPINE_VERSION="3.20"
+ARG ALPINE_VERSION="3.18"
 
 # --------------------------------------------------------
 # Builder
@@ -142,7 +142,7 @@ USER heighliner
 # Runner
 # --------------------------------------------------------
 
-FROM alpine:${ALPINE_VERSION} AS release
+FROM alpine:3.17 AS release
 COPY --from=builder /go/bin/xiond /usr/bin/xiond
 COPY --from=builder /go/bin/cosmovisor /usr/bin/cosmovisor
 
