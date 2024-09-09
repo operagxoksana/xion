@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION="1.22"
-ARG ALPINE_VERSION="3.17"
+ARG ALPINE_VERSION="3.20"
 
 # --------------------------------------------------------
 # Builder
