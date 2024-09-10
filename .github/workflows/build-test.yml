@@ -14,32 +14,38 @@ concurrency:
 jobs:
   lint:
     name: Golang CI Lint
-    uses: burnt-labs/xion/.github/workflows/golangci-lint.yml@main
+    uses: burnt-labs/xion/.github/workflows/golangci-lint.yml@fix/sigabrt
     secrets: inherit
 
   update-swagger:
     name: Update Swagger
-    uses: burnt-labs/xion/.github/workflows/update-swagger.yml@main
+    uses: burnt-labs/xion/.github/workflows/update-swagger.yml@fix/sigabrt
     secrets: inherit
 
   unit-tests:
     name: Go Unit Tests
-    uses: burnt-labs/xion/.github/workflows/tests.yml@main
+    uses: burnt-labs/xion/.github/workflows/tests.yml@fix/sigabrt
     secrets: inherit
 
   build-docker:
     name: Build Docker Images
-    uses: burnt-labs/xion/.github/workflows/docker-build.yml@main
+    uses: burnt-labs/xion/.github/workflows/docker-build.yml@fix/sigabrt
     secrets: inherit
 
   docker-scout:
     needs: build-docker
     name: Docker Scout
-    uses: burnt-labs/xion/.github/workflows/docker-scout.yml@main
+    uses: burnt-labs/xion/.github/workflows/docker-scout.yml@fix/sigabrt
     secrets: inherit
 
   interchain-tests:
     needs: build-docker
     name: Interchain tests
-    uses: burnt-labs/xion/.github/workflows/integration-tests.yml@main
+    uses: burnt-labs/xion/.github/workflows/integration-tests.yml@fix/sigabrt
+    secrets: inherit
+
+  push-docker:
+    needs: build-docker
+    name: Push Docker Images
+    uses: burnt-labs/xion/.github/workflows/docker-push.yml@fix/sigabrt
     secrets: inherit

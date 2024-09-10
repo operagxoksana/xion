@@ -44,7 +44,11 @@ jobs:
           echo "XIOND_FN=xiond/${{ matrix.runner.platform }}" | tr '/' '-' | tee -a $GITHUB_ENV
           echo "DOCKER_FN=docker/${{ matrix.runner.platform }}.tar" | tr '/' '-' | tee -a $GITHUB_ENV
           echo "HEIGHLINER_FN=heighliner/${{ matrix.runner.platform }}.tar" | tr '/' '-' | tee -a $GITHUB_ENV
-          echo "VERSION=$(git describe --tags | sed 's/^v//')" | tee -a $GITHUB_ENV
+          if [[ "${GITHUB_REF}" == ref/tags/* ]]; then
+            echo "VERSION=$(echo ${GITHUB_REF_NAME} | sed 's/^v//')" | tee -a $GITHUB_ENV
+          else
+            echo "VERSION=$(git describe --tags | sed 's/^v//')" | tee -a $GITHUB_ENV
+          fi
 
       - name: Build Docker Image
         id: build-docker
