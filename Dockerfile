@@ -17,12 +17,17 @@ ARG TARGETOS
 # needed in makefile
 ARG COMMIT
 ARG VERSION
+ARG CGO_ENABLED=1
+ARG LINK_STATICALLY="false"
 
 # Consume Args to env
-ENV COMMIT=${COMMIT} \
+ENV \
+  COMMIT=${COMMIT} \
   VERSION=${VERSION} \
   GOOS=${TARGETOS} \
-  GOARCH=${TARGETARCH}
+  GOARCH=${TARGETARCH} \
+  CGO_ENABLED=${CGO_ENABLED} \
+  LINK_STATICALLY=${LINK_STATICALLY}
 
 # Install dependencies
 RUN set -eux; \
@@ -52,17 +57,16 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
   --mount=type=cache,target=/root/pkg/mod \
   set -eux; \
-  export CGO_ENABLED=1 LINK_STATICALLY=false; \
   make test-version; \
   make install;
 
 RUN set -eux; \
   mkdir -p /go/lib; \
-  cp -L /lib/ld-linux-*.so.1 /go/lib; \
+  cp -L /lib*/ld-linux-*.so.* /go/lib; \
   ldd /go/bin/xiond | \
   awk '{print $1}' | \
   xargs -I {} find / -name {} -not -path "/go/lib/*" 2>/dev/null | \
-  xargs -I {} cp -L {} /go/lib/
+  xargs -I {} cp -L {} /go/lib/;
 
 # --------------------------------------------------------
 # Heighliner
@@ -84,7 +88,7 @@ COPY --from=busybox:1.36-musl /etc/passwd /etc/group /etc/
 COPY --from=alpine:3 /etc/ssl/cert.pem /etc/ssl/cert.pem
 
 # Install xiond
-COPY --from=builder /go/lib/ /lib/
+COPY --from=builder /go/lib/* /lib/
 COPY --from=builder /go/bin/xiond /bin/xiond
 
 # Install jq
@@ -124,6 +128,7 @@ RUN set -eux; \
   done;
 
 RUN set -eux; \
+  busybox ln -s /lib /lib64; \
   busybox mkdir -p /tmp /home/heighliner; \
   busybox addgroup --gid 1025 -S heighliner; \
   busybox adduser --uid 1025 -h /home/heighliner -S heighliner -G heighliner; \
@@ -138,7 +143,7 @@ USER heighliner
 # --------------------------------------------------------
 
 FROM alpine:${ALPINE_VERSION} AS release
-COPY --from=builder /go/lib/ /lib/
+COPY --from=builder /go/lib/* /lib/
 COPY --from=builder /go/bin/xiond /usr/bin/xiond
 COPY --from=builder /go/bin/cosmovisor /usr/bin/cosmovisor
 
@@ -154,6 +159,7 @@ EXPOSE 26657
 EXPOSE 26660
 
 RUN set -euxo pipefail; \
+  ln -s /lib /lib64; \
   apk add --no-cache bash openssl curl htop jq lz4 tini; \
   addgroup --gid 1000 -S xiond; \
   adduser --uid 1000 -S xiond \
