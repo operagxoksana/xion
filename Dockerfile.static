@@ -7,7 +7,7 @@ ARG ALPINE_VERSION="3.18"
 # Builder
 # --------------------------------------------------------
 
-FROM golang:${GO_VERSION}-bookworm AS builder
+FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder
 
 # Always set by buildkit
 ARG TARGETPLATFORM
@@ -26,13 +26,12 @@ ENV COMMIT=${COMMIT} \
 
 # Install dependencies
 RUN set -eux; \
-  apt-get update && \
-  apt-get install -y --no-install-recommends \
-  build-essential \
+  apk add --no-cache \
+  build-base \
   ca-certificates \
+  linux-headers \
   binutils-gold \
-  git && \
-  rm -rf /var/lib/apt/lists/*
+  git
 
 # Set the workdir
 WORKDIR /go/src/github.com/burnt-labs/xion
@@ -45,6 +44,21 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
   go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.5.0; \
   go mod download
 
+# Cosmwasm - Download correct libwasmvm version
+RUN set -eux; \
+  WASMVM_REPO="github.com/CosmWasm/wasmvm"; \
+  WASMVM_MOD_VERSION="$(grep ${WASMVM_REPO} go.mod | cut -d ' ' -f 1)"; \
+  WASMVM_VERSION="$(go list -m ${WASMVM_MOD_VERSION} | cut -d ' ' -f 2)"; \
+  [ ${TARGETPLATFORM} = "linux/amd64" ] && LIBWASM="libwasmvm_muslc.x86_64.a"; \
+  [ ${TARGETPLATFORM} = "linux/arm64" ] && LIBWASM="libwasmvm_muslc.aarch64.a"; \
+  [ ${TARGETOS} = "darwin" ] && LIBWASM="libwasmvmstatic_darwin.a"; \
+  [ -z "$LIBWASM" ] && echo "Arch ${TARGETARCH} not recognized" && exit 1; \
+  wget "https://${WASMVM_REPO}/releases/download/${WASMVM_VERSION}/${LIBWASM}" -O "/lib/${LIBWASM}"; \
+  # verify checksum
+  EXPECTED=$(wget -q "https://${WASMVM_REPO}/releases/download/${WASMVM_VERSION}/checksums.txt" -O- | grep "${LIBWASM}" | awk '{print $1}'); \
+  sha256sum "/lib/${LIBWASM}" | grep "${EXPECTED}"; \
+  cp /lib/${LIBWASM} /lib/libwasmvm_muslc.a;
+
 # Copy local files
 COPY . .
 
@@ -52,17 +66,9 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
   --mount=type=cache,target=/root/pkg/mod \
   set -eux; \
-  export CGO_ENABLED=1 LINK_STATICALLY=false; \
+  export CGO_ENABLED=1 LINK_STATICALLY=true BUILD_TAGS=muslc; \
   make test-version; \
   make install;
-
-RUN set -eux; \
-  mkdir -p /go/lib; \
-  cp -L /lib/ld-linux-*.so.1 /go/lib; \
-  ldd /go/bin/xiond | \
-  awk '{print $1}' | \
-  xargs -I {} find / -name {} -not -path "/go/lib/*" 2>/dev/null | \
-  xargs -I {} cp -L {} /go/lib/
 
 # --------------------------------------------------------
 # Heighliner
@@ -81,10 +87,9 @@ COPY --from=busybox:1.36-musl /bin/busybox /bin/busybox
 COPY --from=busybox:1.36-musl /etc/passwd /etc/group /etc/
 
 # Install trusted CA certificates
-COPY --from=alpine:3 /etc/ssl/cert.pem /etc/ssl/cert.pem
+COPY --from=builder /etc/ssl/cert.pem /etc/ssl/cert.pem
 
 # Install xiond
-COPY --from=builder /go/lib/ /lib/
 COPY --from=builder /go/bin/xiond /bin/xiond
 
 # Install jq
@@ -137,8 +142,7 @@ USER heighliner
 # Runner
 # --------------------------------------------------------
 
-FROM alpine:${ALPINE_VERSION} AS release
-COPY --from=builder /go/lib/ /lib/
+FROM alpine:3.17 AS release
 COPY --from=builder /go/bin/xiond /usr/bin/xiond
 COPY --from=builder /go/bin/cosmovisor /usr/bin/cosmovisor
 
