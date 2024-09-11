@@ -7,7 +7,7 @@ ARG ALPINE_VERSION="3.20"
 # Builder
 # --------------------------------------------------------
 
-FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder
+FROM golang:${GO_VERSION}-bookworm AS builder
 
 # Always set by buildkit
 ARG TARGETPLATFORM
@@ -17,27 +17,27 @@ ARG TARGETOS
 # needed in makefile
 ARG COMMIT
 ARG VERSION
-ARG CGO_ENABLED=1
-ARG BUILD_TAGS=muslc
-ARG LINK_STATICALLY="true"
+ARG CGO_ENABLED=0
+ARG LINK_STATICALLY="false"
 
 # Consume Args to env
-ENV COMMIT=${COMMIT} \
-	VERSION=${VERSION} \
-	GOOS=${TARGETOS} \
-	GOARCH=${TARGETARCH} \
-	BUILD_TAGS=${BUILD_TAGS} \
-	CGO_ENABLED=${CGO_ENABLED} \
-	LINK_STATICALLY=${LINK_STATICALLY}
+ENV \
+  COMMIT=${COMMIT} \
+  VERSION=${VERSION} \
+  GOOS=${TARGETOS} \
+  GOARCH=${TARGETARCH} \
+  CGO_ENABLED=${CGO_ENABLED} \
+  LINK_STATICALLY=${LINK_STATICALLY}
 
 # Install dependencies
 RUN set -eux; \
-	apk add --no-cache \
-	build-base \
-	ca-certificates \
-	linux-headers \
-	binutils-gold \
-	git
+  apt-get update && \
+  apt-get install -y --no-install-recommends \
+  build-essential \
+  ca-certificates \
+  binutils-gold \
+  git && \
+  rm -rf /var/lib/apt/lists/*
 
 # Set the workdir
 WORKDIR /go/src/github.com/burnt-labs/xion
@@ -45,40 +45,35 @@ WORKDIR /go/src/github.com/burnt-labs/xion
 # Download go dependencies
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build \
-	--mount=type=cache,target=/root/pkg/mod \
-	set -eux; \
-	go mod download
-
-# Cosmwasm - Download correct libwasmvm version
-RUN set -eux; \
-	WASMVM_REPO="github.com/CosmWasm/wasmvm"; \
-	WASMVM_MOD_VERSION="$(grep ${WASMVM_REPO} go.mod | cut -d ' ' -f 1)"; \
-	WASMVM_VERSION="$(go list -m ${WASMVM_MOD_VERSION} | cut -d ' ' -f 2)"; \
-	[ ${TARGETPLATFORM} = "linux/amd64" ] && LIBWASM="libwasmvm_muslc.x86_64.a"; \
-	[ ${TARGETPLATFORM} = "linux/arm64" ] && LIBWASM="libwasmvm_muslc.aarch64.a"; \
-	[ ${TARGETOS} = "darwin" ] && LIBWASM="libwasmvmstatic_darwin.a"; \
-	[ -z "$LIBWASM" ] && echo "Arch ${TARGETARCH} not recognized" && exit 1; \
-	wget "https://${WASMVM_REPO}/releases/download/${WASMVM_VERSION}/${LIBWASM}" -O "/lib/${LIBWASM}"; \
-	# verify checksum
-	EXPECTED=$(wget -q "https://${WASMVM_REPO}/releases/download/${WASMVM_VERSION}/checksums.txt" -O- | grep "${LIBWASM}" | awk '{print $1}'); \
-	sha256sum "/lib/${LIBWASM}" | grep "${EXPECTED}"; \
-	cp /lib/${LIBWASM} /lib/libwasmvm_muslc.a;
+  --mount=type=cache,target=/root/pkg/mod \
+  set -eux; \
+  go mod download
 
 # Copy local files
 COPY . .
 
 # Build xiond binary
 RUN --mount=type=cache,target=/root/.cache/go-build \
-	--mount=type=cache,target=/root/pkg/mod \
-	set -eux; \
-	make test-version; \
-	make install;
+  --mount=type=cache,target=/root/pkg/mod \
+  set -eux; \
+  make test-version; \
+  go install -mod=readonly -ldflags \
+  '-X github.com/cosmos/cosmos-sdk/version.Name=xion -X github.com/cosmos/cosmos-sdk/version.AppName=xiond -X github.com/cosmos/cosmos-sdk/version.Version= -X github.com/cosmos/cosmos-sdk/version.Commit= -X github.com/CosmWasm/wasmd/app.Bech32Prefix=xion"' \
+  -trimpath ./cmd/xiond
 
 # Install cosmovisor
 RUN --mount=type=cache,target=/root/.cache/go-build \
-	--mount=type=cache,target=/root/pkg/mod \
-	set -eux; \
-	go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.5.0;
+  --mount=type=cache,target=/root/pkg/mod \
+  set -eux; \
+  go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.5.0;
+
+RUN set -eux; \
+  mkdir -p /go/lib; \
+  cp -L /lib*/ld-linux-*.so.* /go/lib; \
+  ldd /go/bin/xiond | \
+  awk '{print $1}' | \
+  xargs -I {} find / -name {} -not -path "/go/lib/*" 2>/dev/null | \
+  xargs -I {} cp -L {} /go/lib/;
 
 # --------------------------------------------------------
 # Heighliner
@@ -97,9 +92,10 @@ COPY --from=busybox:1.36-musl /bin/busybox /bin/busybox
 COPY --from=busybox:1.36-musl /etc/passwd /etc/group /etc/
 
 # Install trusted CA certificates
-COPY --from=builder /etc/ssl/cert.pem /etc/ssl/cert.pem
+COPY --from=alpine:3 /etc/ssl/cert.pem /etc/ssl/cert.pem
 
 # Install xiond
+COPY --from=builder /go/lib/* /lib/
 COPY --from=builder /go/bin/xiond /bin/xiond
 
 # Install jq
@@ -111,39 +107,40 @@ RUN ["busybox", "ln", "/bin/busybox", "sh"]
 # Add hard links for read-only utils
 # Will then only have one copy of the busybox minimal binary file with all utils pointing to the same underlying inode
 RUN set -eux; \
-	for bin in \
-	cat \
-	date \
-	df \
-	du \
-	env \
-	grep \
-	head \
-	less \
-	ls \
-	md5sum \
-	pwd \
-	sha1sum \
-	sha256sum \
-	sha3sum \
-	sha512sum \
-	sleep \
-	stty \
-	tail \
-	tar \
-	tee \
-	tr \
-	watch \
-	which \
-	; do busybox ln /bin/busybox $bin; \
-	done;
+  for bin in \
+  cat \
+  date \
+  df \
+  du \
+  env \
+  grep \
+  head \
+  less \
+  ls \
+  md5sum \
+  pwd \
+  sha1sum \
+  sha256sum \
+  sha3sum \
+  sha512sum \
+  sleep \
+  stty \
+  tail \
+  tar \
+  tee \
+  tr \
+  watch \
+  which \
+  ; do busybox ln /bin/busybox $bin; \
+  done;
 
 RUN set -eux; \
-	busybox mkdir -p /tmp /home/heighliner; \
-	busybox addgroup --gid 1025 -S heighliner; \
-	busybox adduser --uid 1025 -h /home/heighliner -S heighliner -G heighliner; \
-	busybox chown 1025:1025 /tmp /home/heighliner; \
-	busybox unlink busybox;
+  busybox ln -s /lib /lib64; \
+  busybox mkdir -p /tmp /home/heighliner; \
+  busybox addgroup --gid 1025 -S heighliner; \
+  busybox adduser --uid 1025 -h /home/heighliner -S heighliner -G heighliner; \
+  busybox chown 1025:1025 /tmp /home/heighliner; \
+  busybox unlink busybox;
 
 WORKDIR /home/heighliner
 USER heighliner
@@ -153,6 +150,7 @@ USER heighliner
 # --------------------------------------------------------
 
 FROM alpine:${ALPINE_VERSION} AS release
+COPY --from=builder /go/lib/* /lib/
 COPY --from=builder /go/bin/xiond /usr/bin/xiond
 COPY --from=builder /go/bin/cosmovisor /usr/bin/cosmovisor
 
@@ -168,14 +166,15 @@ EXPOSE 26657
 EXPOSE 26660
 
 RUN set -euxo pipefail; \
-	apk add --no-cache bash openssl curl htop jq lz4 tini; \
-	addgroup --gid 1000 -S xiond; \
-	adduser --uid 1000 -S xiond \
-	--gecos xiond \
-	--ingroup xiond \
-	--disabled-password; \
-	mkdir -p /home/xiond; \
-	chown -R xiond:xiond /home/xiond
+  ln -s /lib /lib64; \
+  apk add --no-cache bash openssl curl htop jq lz4 tini; \
+  addgroup --gid 1000 -S xiond; \
+  adduser --uid 1000 -S xiond \
+  --disabled-password \
+  --gecos xiond \
+  --ingroup xiond; \
+  mkdir -p /home/xiond; \
+  chown -R xiond:xiond /home/xiond
 
 USER xiond:xiond
 WORKDIR /home/xiond/.xiond
