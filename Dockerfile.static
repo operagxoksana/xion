@@ -38,6 +38,7 @@ RUN set -eux; \
 	build-base \
 	ca-certificates \
 	linux-headers \
+	binutils-gold \
 	git
 
 # Set the workdir
