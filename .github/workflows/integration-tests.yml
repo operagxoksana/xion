@@ -15,10 +15,10 @@ jobs:
       fail-fast: false
       matrix:
         runner:
-          - selector: ubuntu-latest
-            platform: linux/amd64
-          # - selector: burnt-labs-arm64
-          #   platform: linux/arm64
+          # - selector: ubuntu-latest
+          #   platform: linux/amd64
+          - selector: burnt-labs-arm64
+            platform: linux/arm64
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -73,22 +73,22 @@ jobs:
           # - selector: burnt-labs-arm64
           #   platform: linux/arm64
         test_type:
-        - "DungeonTransferBlock"
-        - "XionSendPlatformFee"
-        - "MintModuleNoInflationNoFees"
-        - "MintModuleInflationHighFees"
-        - "MintModuleInflationLowFees"
-        - "JWTAbstractAccount"
-        - "XionSendPlatformFee"
-        - "XionAbstractAccount"
-        - "WebAuthNAbstractAccount"
-        - "XionMinimumFeeDefault"
-        - "XionMinimumFeeZero"
-        - "XionTokenFactory"
-        - "XionAbstractAccountJWTCLI"
-        - "TreasuryContract"
-        - "TreasuryMulti"
-        - "SingleAbstractAccountMigration"
+          - "DungeonTransferBlock"
+          - "XionSendPlatformFee"
+          - "MintModuleNoInflationNoFees"
+          - "MintModuleInflationHighFees"
+          - "MintModuleInflationLowFees"
+          - "JWTAbstractAccount"
+          - "XionSendPlatformFee"
+          - "XionAbstractAccount"
+          - "WebAuthNAbstractAccount"
+          - "XionMinimumFeeDefault"
+          - "XionMinimumFeeZero"
+          - "XionTokenFactory"
+          - "XionAbstractAccountJWTCLI"
+          - "TreasuryContract"
+          - "TreasuryMulti"
+          - "SingleAbstractAccountMigration"
 
     steps:
       - name: checkout
