@@ -17,10 +17,10 @@ ARG TARGETOS
 # needed in makefile
 ARG COMMIT
 ARG VERSION
-ARG CGO_ENABLED=0
+ARG CGO_ENABLED=1
 ARG BUILD_TAGS=muslc
-ARG LEDGER_ENABLED="false"
-ARG LINK_STATICALLY="false"
+ARG LEDGER_ENABLED="true"
+ARG LINK_STATICALLY="true"
 
 # Consume Args to env
 ENV COMMIT=${COMMIT} \
@@ -38,7 +38,6 @@ RUN set -eux; \
 	build-base \
 	ca-certificates \
 	linux-headers \
-	binutils-gold \
 	git
 
 # Set the workdir
