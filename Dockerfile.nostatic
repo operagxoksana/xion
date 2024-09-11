@@ -53,7 +53,6 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 # Cosmwasm - Download correct libwasmvm version
 RUN set -eux; \
-    mkdir -p /go/lib; \
     WASMVM_REPO="github.com/CosmWasm/wasmvm"; \
     WASMVM_MOD_VERSION="$(grep ${WASMVM_REPO} go.mod | cut -d ' ' -f 1)"; \
     WASMVM_VERSION="$(go list -m ${WASMVM_MOD_VERSION} | cut -d ' ' -f 2)"; \
@@ -61,11 +60,11 @@ RUN set -eux; \
     [ ${TARGETPLATFORM} = "linux/arm64" ] && LIBWASM="libwasmvm.aarch64.so"; \
     [ ${TARGETOS} = "darwin" ] && LIBWASM="libwasmvmstatic_darwin.a"; \
     [ -z "$LIBWASM" ] && echo "Arch ${TARGETARCH} not recognized" && exit 1; \
-    wget "https://${WASMVM_REPO}/releases/download/${WASMVM_VERSION}/${LIBWASM}" -O "/go/lib/${LIBWASM}"; \
+    wget "https://${WASMVM_REPO}/releases/download/${WASMVM_VERSION}/${LIBWASM}" -O "/lib/${LIBWASM}"; \
     # verify checksum
     EXPECTED=$(wget -q "https://${WASMVM_REPO}/releases/download/${WASMVM_VERSION}/checksums.txt" -O- | grep "${LIBWASM}" | awk '{print $1}'); \
-    sha256sum "/go/lib/${LIBWASM}" | grep "${EXPECTED}"; \
-    cp /go/lib/${LIBWASM} /go/lib/libwasmvm.a;
+    sha256sum "/lib/${LIBWASM}" | grep "${EXPECTED}"; \
+    cp /lib/${LIBWASM} /lib/libwasmvm.so;
 
 # Copy local files
 COPY . .
@@ -74,7 +73,6 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/root/pkg/mod \
     set -eux; \
-    export LD_LIBRARY_PATH="/go/lib"; \
     make test-version; \
     make install
 
@@ -83,6 +81,16 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/root/pkg/mod \
     set -eux; \
     go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.5.0;
+
+# Copy required libs
+RUN set -eux; \
+    mkdir -p /go/lib; \
+    cp -L /lib*/ld-linux-*.so.* /go/lib; \
+    cp -L /lib/libwasmvm.* /go/lib; \
+    ldd /go/bin/xiond | grep -v 'libwasmvm' | \
+    awk '{print $1}' | \
+    xargs -I {} find / -name {} -not -path "/go/lib/*" 2>/dev/null | \
+    xargs -I {} cp -L {} /go/lib/;
 
 # --------------------------------------------------------
 # Heighliner

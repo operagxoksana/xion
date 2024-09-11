@@ -1,1 +1,1 @@
-Dockerfile.static
+Dockerfile.nostatic
