@@ -22,8 +22,7 @@ ARG BUILD_TAGS=muslc
 ARG LINK_STATICALLY="true"
 
 # Consume Args to env
-ENV \
-	COMMIT=${COMMIT} \
+ENV COMMIT=${COMMIT} \
 	VERSION=${VERSION} \
 	GOOS=${TARGETOS} \
 	GOARCH=${TARGETARCH} \
@@ -48,7 +47,6 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build \
 	--mount=type=cache,target=/root/pkg/mod \
 	set -eux; \
-	go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.5.0; \
 	go mod download
 
 # Cosmwasm - Download correct libwasmvm version
@@ -74,7 +72,13 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 	--mount=type=cache,target=/root/pkg/mod \
 	set -eux; \
 	make test-version; \
-	make install
+	make install;
+
+# Install cosmovisor
+RUN --mount=type=cache,target=/root/.cache/go-build \
+	--mount=type=cache,target=/root/pkg/mod \
+	set -eux; \
+	go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.5.0;
 
 # --------------------------------------------------------
 # Heighliner
