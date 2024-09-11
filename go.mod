@@ -13,7 +13,7 @@ require (
 	cosmossdk.io/store v1.1.0
 	cosmossdk.io/tools/confix v0.1.2
 	cosmossdk.io/x/evidence v0.1.1
-	cosmossdk.io/x/feegrant v0.1.1
+	cosmossdk.io/x/feegrant v0.1.2-0.20240904145331-d0c8d675d771
 	cosmossdk.io/x/nft v0.1.1
 	cosmossdk.io/x/tx v0.13.4
 	cosmossdk.io/x/upgrade v0.1.4

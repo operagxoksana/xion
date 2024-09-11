@@ -18,26 +18,29 @@ ARG TARGETOS
 ARG COMMIT
 ARG VERSION
 ARG CGO_ENABLED=0
+ARG BUILD_TAGS=muslc,notest
+ARG LEDGER_ENABLED="false"
 ARG LINK_STATICALLY="false"
 
 # Consume Args to env
-ENV \
-  COMMIT=${COMMIT} \
-  VERSION=${VERSION} \
-  GOOS=${TARGETOS} \
-  GOARCH=${TARGETARCH} \
-  CGO_ENABLED=${CGO_ENABLED} \
-  LINK_STATICALLY=${LINK_STATICALLY}
+ENV COMMIT=${COMMIT} \
+    VERSION=${VERSION} \
+    GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH} \
+    BUILD_TAGS=${BUILD_TAGS} \
+    CGO_ENABLED=${CGO_ENABLED} \
+    LEDGER_ENABLED=${LEDGER_ENABLED} \
+    LINK_STATICALLY=${LINK_STATICALLY}
 
 # Install dependencies
 RUN set -eux; \
-  apt-get update && \
-  apt-get install -y --no-install-recommends \
-  build-essential \
-  ca-certificates \
-  binutils-gold \
-  git && \
-  rm -rf /var/lib/apt/lists/*
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    binutils-gold \
+    git && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set the workdir
 WORKDIR /go/src/github.com/burnt-labs/xion
@@ -45,35 +48,33 @@ WORKDIR /go/src/github.com/burnt-labs/xion
 # Download go dependencies
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build \
-  --mount=type=cache,target=/root/pkg/mod \
-  set -eux; \
-  go mod download
+    --mount=type=cache,target=/root/pkg/mod \
+    set -eux; \
+    go mod download
 
 # Copy local files
 COPY . .
 
 # Build xiond binary
 RUN --mount=type=cache,target=/root/.cache/go-build \
-  --mount=type=cache,target=/root/pkg/mod \
-  set -eux; \
-  make test-version; \
-  go install -mod=readonly -ldflags \
-  '-X github.com/cosmos/cosmos-sdk/version.Name=xion -X github.com/cosmos/cosmos-sdk/version.AppName=xiond -X github.com/cosmos/cosmos-sdk/version.Version= -X github.com/cosmos/cosmos-sdk/version.Commit= -X github.com/CosmWasm/wasmd/app.Bech32Prefix=xion"' \
-  -trimpath ./cmd/xiond
+    --mount=type=cache,target=/root/pkg/mod \
+    set -eux; \
+    make test-version; \
+    make install
 
 # Install cosmovisor
 RUN --mount=type=cache,target=/root/.cache/go-build \
-  --mount=type=cache,target=/root/pkg/mod \
-  set -eux; \
-  go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.5.0;
+    --mount=type=cache,target=/root/pkg/mod \
+    set -eux; \
+    go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.5.0;
 
 RUN set -eux; \
-  mkdir -p /go/lib; \
-  cp -L /lib*/ld-linux-*.so.* /go/lib; \
-  ldd /go/bin/xiond | \
-  awk '{print $1}' | \
-  xargs -I {} find / -name {} -not -path "/go/lib/*" 2>/dev/null | \
-  xargs -I {} cp -L {} /go/lib/;
+    mkdir -p /go/lib; \
+    cp -L /lib*/ld-linux-*.so.* /go/lib; \
+    ldd /go/bin/xiond | \
+    awk '{print $1}' | \
+    xargs -I {} find / -name {} -not -path "/go/lib/*" 2>/dev/null | \
+    xargs -I {} cp -L {} /go/lib/;
 
 # --------------------------------------------------------
 # Heighliner
@@ -107,40 +108,40 @@ RUN ["busybox", "ln", "/bin/busybox", "sh"]
 # Add hard links for read-only utils
 # Will then only have one copy of the busybox minimal binary file with all utils pointing to the same underlying inode
 RUN set -eux; \
-  for bin in \
-  cat \
-  date \
-  df \
-  du \
-  env \
-  grep \
-  head \
-  less \
-  ls \
-  md5sum \
-  pwd \
-  sha1sum \
-  sha256sum \
-  sha3sum \
-  sha512sum \
-  sleep \
-  stty \
-  tail \
-  tar \
-  tee \
-  tr \
-  watch \
-  which \
-  ; do busybox ln /bin/busybox $bin; \
-  done;
+    for bin in \
+    cat \
+    date \
+    df \
+    du \
+    env \
+    grep \
+    head \
+    less \
+    ls \
+    md5sum \
+    pwd \
+    sha1sum \
+    sha256sum \
+    sha3sum \
+    sha512sum \
+    sleep \
+    stty \
+    tail \
+    tar \
+    tee \
+    tr \
+    watch \
+    which \
+    ; do busybox ln /bin/busybox $bin; \
+    done;
 
 RUN set -eux; \
-  busybox ln -s /lib /lib64; \
-  busybox mkdir -p /tmp /home/heighliner; \
-  busybox addgroup --gid 1025 -S heighliner; \
-  busybox adduser --uid 1025 -h /home/heighliner -S heighliner -G heighliner; \
-  busybox chown 1025:1025 /tmp /home/heighliner; \
-  busybox unlink busybox;
+    busybox ln -s /lib /lib64; \
+    busybox mkdir -p /tmp /home/heighliner; \
+    busybox addgroup --gid 1025 -S heighliner; \
+    busybox adduser --uid 1025 -h /home/heighliner -S heighliner -G heighliner; \
+    busybox chown 1025:1025 /tmp /home/heighliner; \
+    busybox unlink busybox;
 
 WORKDIR /home/heighliner
 USER heighliner
@@ -166,15 +167,15 @@ EXPOSE 26657
 EXPOSE 26660
 
 RUN set -euxo pipefail; \
-  ln -s /lib /lib64; \
-  apk add --no-cache bash openssl curl htop jq lz4 tini; \
-  addgroup --gid 1000 -S xiond; \
-  adduser --uid 1000 -S xiond \
-  --disabled-password \
-  --gecos xiond \
-  --ingroup xiond; \
-  mkdir -p /home/xiond; \
-  chown -R xiond:xiond /home/xiond
+    ln -s /lib /lib64; \
+    apk add --no-cache bash openssl curl htop jq lz4 tini; \
+    addgroup --gid 1000 -S xiond; \
+    adduser --uid 1000 -S xiond \
+    --disabled-password \
+    --gecos xiond \
+    --ingroup xiond; \
+    mkdir -p /home/xiond; \
+    chown -R xiond:xiond /home/xiond
 
 USER xiond:xiond
 WORKDIR /home/xiond/.xiond
