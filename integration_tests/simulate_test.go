@@ -288,7 +288,7 @@ func TestSimulate(t *testing.T) {
 	sig := signing.SignatureV2{
 		PubKey:   account.GetPubKey(),
 		Data:     &sigData,
-		Sequence: account.GetSequence(),
+		Sequence: 0,
 	}
 
 	err = txBuilder.SetSignatures(sig)
